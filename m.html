@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>MRI PNG Mobile</title>
+<style>
+:root{--bg:#000;--panel:#111318;--line:#262932;--fg:#eceef3;--mute:#8b90a0;--acc:#6ea8ff}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:15px/1.4 system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif}
+header{position:sticky;top:0;z-index:2;background:var(--panel);border-bottom:1px solid var(--line);padding:calc(8px + env(safe-area-inset-top)) 12px 8px;display:flex;gap:8px;flex-wrap:wrap}
+header h1{flex:100%;margin:0;font-size:15px}
+select{flex:1;min-width:0;background:#1b1e26;color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:11px 10px;font-size:15px}
+#info{padding:8px 12px;color:var(--mute);font-size:13px}
+#grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding-bottom:env(safe-area-inset-bottom)}
+#grid div{aspect-ratio:1;background:#0a0a0a;position:relative}
+#grid img{width:100%;height:100%;object-fit:contain;display:block}
+#grid span{position:absolute;left:3px;bottom:2px;font-size:10px;color:#fff;text-shadow:0 0 3px #000}
+#v{position:fixed;inset:0;background:#000;z-index:9;display:none;flex-direction:column;touch-action:pan-y}
+#v.show{display:flex}
+#top{display:flex;justify-content:space-between;align-items:center;padding:calc(8px + env(safe-area-inset-top)) 14px 8px;font-size:13px;color:#ccc}
+#top button{background:#222;color:#fff;border:0;border-radius:20px;padding:8px 16px;font-size:15px}
+#stage{flex:1;overflow:hidden;display:flex;align-items:center;justify-content:center;touch-action:none}
+#stage img{max-width:100%;max-height:100%;object-fit:contain;transform-origin:center;user-select:none;-webkit-user-drag:none}
+#bot{padding:10px 18px calc(14px + env(safe-area-inset-bottom));display:flex;align-items:center;gap:12px}
+#bot button{background:#222;color:#fff;border:0;border-radius:50%;width:44px;height:44px;font-size:20px}
+#bot input{flex:1;height:32px}
+</style>
+</head>
+<body>
+<header>
+  <h1>MRI PNG <a href="./?desktop=1" style="float:right;color:var(--acc);font-weight:400;font-size:13px">PC 버전</a></h1>
+  <select id="st"></select><select id="se"></select>
+</header>
+<div id="info"></div>
+<div id="grid"></div>
+<div id="v">
+  <div id="top"><span id="cap"></span><button id="x">닫기</button></div>
+  <div id="stage"><img id="im" alt=""></div>
+  <div id="bot"><button id="pv">‹</button><input id="sl" type="range" min="0" value="0"><button id="nx">›</button></div>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const url=(id,w)=>`https://drive.google.com/thumbnail?id=${id}&sz=w${w}`;
+let root,cur=[],idx=0;
+fetch("data.json").then(r=>r.json()).then(r=>{
+  root=r;$("#st").innerHTML=r.d.map((s,i)=>`<option value="${i}">${s.n}</option>`).join("");
+  const h=decodeURIComponent(location.hash.slice(1)).split("/");
+  const si=Math.max(0,r.d.findIndex(s=>s.n===h[0]));$("#st").value=si;fillSeries(h[1]);
+});
+function fillSeries(want){
+  const st=root.d[$("#st").value];
+  const list=st.d||[];$("#se").innerHTML=list.map((s,i)=>`<option value="${i}">${s.n} (${s.f.length})</option>`).join("");
+  const i=Math.max(0,list.findIndex(s=>s.n===want));$("#se").value=i;showSeries();
+}
+function showSeries(){
+  const st=root.d[$("#st").value],se=(st.d||[])[$("#se").value];
+  cur=se?se.f:[];$("#info").textContent=`${cur.length}장 · 탭하여 크게 보기`;
+  location.replace("#"+encodeURIComponent(st.n)+"/"+encodeURIComponent(se?se.n:""));
+  $("#grid").innerHTML=cur.map((f,i)=>`<div data-i="${i}"><img loading="lazy" src="${url(f[0],300)}" alt=""><span>${i+1}</span></div>`).join("");
+  scrollTo(0,0);
+}
+$("#st").onchange=()=>fillSeries();$("#se").onchange=showSeries;
+$("#grid").onclick=e=>{const d=e.target.closest("[data-i]");if(d)openV(+d.dataset.i)};
+function openV(i){$("#v").classList.add("show");$("#sl").max=cur.length-1;go(i);document.body.style.overflow="hidden"}
+function go(i){
+  idx=Math.min(cur.length-1,Math.max(0,i));const f=cur[idx];
+  reset();$("#im").src=url(f[0],1600);$("#cap").textContent=`${f[1]}  ${idx+1}/${cur.length}`;$("#sl").value=idx;
+  [idx-1,idx+1].forEach(j=>{if(cur[j])new Image().src=url(cur[j][0],1600)});
+}
+$("#x").onclick=()=>{$("#v").classList.remove("show");document.body.style.overflow=""};
+$("#pv").onclick=()=>go(idx-1);$("#nx").onclick=()=>go(idx+1);
+$("#sl").oninput=e=>go(+e.target.value);
+// gestures: swipe (1 finger, unzoomed), pinch zoom, pan when zoomed, double-tap zoom
+let sc=1,tx=0,ty=0,sx,sy,d0,sc0,lt=0,mode="";
+const im=$("#im");
+function apply(){im.style.transform=`translate(${tx}px,${ty}px) scale(${sc})`}
+function reset(){sc=1;tx=ty=0;apply()}
+const dist=t=>Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);
+const st=$("#stage");
+st.addEventListener("touchstart",e=>{
+  if(e.touches.length===2){mode="pinch";d0=dist(e.touches);sc0=sc}
+  else{mode="one";sx=e.touches[0].clientX;sy=e.touches[0].clientY;
+    const n=Date.now();if(n-lt<300){sc=sc>1?1:2.5;tx=ty=0;apply()}lt=n}
+},{passive:true});
+st.addEventListener("touchmove",e=>{
+  if(mode==="pinch"&&e.touches.length===2){sc=Math.min(6,Math.max(1,sc0*dist(e.touches)/d0));if(sc===1)tx=ty=0;apply()}
+  else if(mode==="one"&&sc>1){const t=e.touches[0];tx+=t.clientX-sx;ty+=t.clientY-sy;sx=t.clientX;sy=t.clientY;apply()}
+},{passive:true});
+st.addEventListener("touchend",e=>{
+  if(mode==="one"&&sc===1&&e.changedTouches.length){
+    const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;
+    if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.5)go(idx+(dx<0?1:-1));
+  }
+  if(e.touches.length===0)mode="";
+});
+addEventListener("keydown",e=>{if(!$("#v").classList.contains("show"))return;
+  if(e.key==="ArrowLeft")go(idx-1);else if(e.key==="ArrowRight")go(idx+1);else if(e.key==="Escape")$("#x").click()});
+</script>
+</body>
+</html>
