@@ -24,6 +24,7 @@ select{flex:1;min-width:0;background:#1b1e26;color:var(--fg);border:1px solid va
 #stage{flex:1;overflow:hidden;display:flex;align-items:center;justify-content:center;touch-action:none}
 #stage img{max-width:100%;max-height:100%;object-fit:contain;transform-origin:center;user-select:none;-webkit-user-drag:none}
 #bot{padding:10px 18px calc(14px + env(safe-area-inset-bottom));display:flex;align-items:center;gap:12px}
+#top button#sh{background:var(--acc);color:#000;font-size:14px}
 #bot button{background:#222;color:#fff;border:0;border-radius:50%;width:44px;height:44px;font-size:20px}
 #bot input{flex:1;height:32px}
 </style>
@@ -36,9 +37,9 @@ select{flex:1;min-width:0;background:#1b1e26;color:var(--fg);border:1px solid va
 <div id="info"></div>
 <div id="grid"></div>
 <div id="v">
-  <div id="top"><span id="cap"></span><button id="x">닫기</button></div>
+  <div id="top"><span id="cap"></span><span><button id="sh">링크 공유</button> <button id="x">닫기</button></span></div>
   <div id="stage"><img id="im" alt=""></div>
-  <div id="bot"><button id="pv">‹</button><input id="sl" type="range" min="0" value="0"><button id="nx">›</button></div>
+  <div id="bot"><button id="pv">‹</button><input id="sl" type="range" min="0" value="0"><button id="nx">›</button><button id="pl">▶</button></div>
 </div>
 <script>
 const $=s=>document.querySelector(s);
@@ -46,18 +47,23 @@ const url=(id,w)=>`https://drive.google.com/thumbnail?id=${id}&sz=w${w}`;
 let root,cur=[],idx=0;
 fetch("data.json").then(r=>r.json()).then(r=>{
   root=r;$("#st").innerHTML=r.d.map((s,i)=>`<option value="${i}">${s.n}</option>`).join("");
-  const h=decodeURIComponent(location.hash.slice(1)).split("/");
+  let h=decodeURIComponent(location.hash.slice(1)).split("/");if(h[0]===r.n)h=h.slice(1);
   const si=Math.max(0,r.d.findIndex(s=>s.n===h[0]));$("#st").value=si;fillSeries(h[1]);
+  if(h[2]&&cur.length)openV(Math.min(cur.length,Math.max(1,+h[2]||1))-1);
 });
 function fillSeries(want){
   const st=root.d[$("#st").value];
   const list=st.d||[];$("#se").innerHTML=list.map((s,i)=>`<option value="${i}">${s.n} (${s.f.length})</option>`).join("");
   const i=Math.max(0,list.findIndex(s=>s.n===want));$("#se").value=i;showSeries();
 }
+function setHash(n){
+  const st=root.d[$("#st").value],se=(st.d||[])[$("#se").value];
+  history.replaceState(null,"","#"+encodeURIComponent(st.n)+"/"+encodeURIComponent(se?se.n:"")+(n?"/"+n:""));
+}
 function showSeries(){
   const st=root.d[$("#st").value],se=(st.d||[])[$("#se").value];
   cur=se?se.f:[];$("#info").textContent=`${cur.length}장 · 탭하여 크게 보기`;
-  location.replace("#"+encodeURIComponent(st.n)+"/"+encodeURIComponent(se?se.n:""));
+  setHash();
   $("#grid").innerHTML=cur.map((f,i)=>`<div data-i="${i}"><img loading="lazy" src="${url(f[0],300)}" alt=""><span>${i+1}</span></div>`).join("");
   scrollTo(0,0);
 }
@@ -66,12 +72,18 @@ $("#grid").onclick=e=>{const d=e.target.closest("[data-i]");if(d)openV(+d.datase
 function openV(i){$("#v").classList.add("show");$("#sl").max=cur.length-1;go(i);document.body.style.overflow="hidden"}
 function go(i){
   idx=Math.min(cur.length-1,Math.max(0,i));const f=cur[idx];
-  reset();$("#im").src=url(f[0],1600);$("#cap").textContent=`${f[1]}  ${idx+1}/${cur.length}`;$("#sl").value=idx;
+  reset();$("#im").src=url(f[0],1600);$("#cap").textContent=`${f[1]}  ${idx+1}/${cur.length}`;$("#sl").value=idx;setHash(idx+1);
   [idx-1,idx+1].forEach(j=>{if(cur[j])new Image().src=url(cur[j][0],1600)});
 }
-$("#x").onclick=()=>{$("#v").classList.remove("show");document.body.style.overflow=""};
-$("#pv").onclick=()=>go(idx-1);$("#nx").onclick=()=>go(idx+1);
-$("#sl").oninput=e=>go(+e.target.value);
+$("#x").onclick=()=>{stop();setHash();$("#v").classList.remove("show");document.body.style.overflow=""};
+$("#pv").onclick=()=>{stop();go(idx-1)};$("#nx").onclick=()=>{stop();go(idx+1)};
+let timer=null;
+function stop(){clearInterval(timer);timer=null;$("#pl").textContent="▶"}
+$("#pl").onclick=()=>{if(timer)return stop();if(idx>=cur.length-1)go(0);$("#pl").textContent="❚❚";
+  timer=setInterval(()=>{if(idx>=cur.length-1)stop();else go(idx+1)},900)};
+$("#sh").onclick=async()=>{const u=location.href;
+  try{if(navigator.share)await navigator.share({title:document.title,url:u});else{await navigator.clipboard.writeText(u);$("#sh").textContent="복사됨!";setTimeout(()=>$("#sh").textContent="링크 공유",1500)}}catch(e){}};
+$("#sl").oninput=e=>{stop();go(+e.target.value)};
 // gestures: swipe (1 finger, unzoomed), pinch zoom, pan when zoomed, double-tap zoom
 let sc=1,tx=0,ty=0,sx,sy,d0,sc0,lt=0,mode="";
 const im=$("#im");
