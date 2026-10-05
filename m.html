@@ -69,10 +69,10 @@ function showSeries(){
 }
 $("#st").onchange=()=>fillSeries();$("#se").onchange=showSeries;
 $("#grid").onclick=e=>{const d=e.target.closest("[data-i]");if(d)openV(+d.dataset.i)};
-function openV(i){$("#v").classList.add("show");$("#sl").max=cur.length-1;go(i);document.body.style.overflow="hidden"}
+function openV(i){$("#v").classList.add("show");reset();$("#sl").max=cur.length-1;go(i);document.body.style.overflow="hidden"}
 function go(i){
   idx=Math.min(cur.length-1,Math.max(0,i));const f=cur[idx];
-  reset();$("#im").src=url(f[0],1600);$("#cap").textContent=`${f[1]}  ${idx+1}/${cur.length}`;$("#sl").value=idx;setHash(idx+1);
+  $("#im").src=url(f[0],1600);$("#cap").textContent=`${f[1]}  ${idx+1}/${cur.length}`;$("#sl").value=idx;setHash(idx+1);
   [idx-1,idx+1].forEach(j=>{if(cur[j])new Image().src=url(cur[j][0],1600)});
 }
 $("#x").onclick=()=>{stop();setHash();$("#v").classList.remove("show");document.body.style.overflow=""};
